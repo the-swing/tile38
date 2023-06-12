@@ -192,7 +192,6 @@ func (s *Server) followStep(host string, port int, followc int) error {
 		return errNoLongerFollowing
 	}
 	s.mu.Lock()
-	s.faofsz = 0
 	s.fcup = false
 	auth := s.config.leaderAuth()
 	s.mu.Unlock()
@@ -264,10 +263,6 @@ func (s *Server) followStep(host string, port int, followc int) error {
 		return err
 	}
 
-	s.mu.Lock()
-	s.faofsz = int(aofSize)
-	s.mu.Unlock()
-
 	caughtUp := pos >= aofSize
 	if caughtUp {
 		s.mu.Lock()
@@ -276,7 +271,6 @@ func (s *Server) followStep(host string, port int, followc int) error {
 		s.mu.Unlock()
 		log.Info("caught up")
 	}
-
 	nullw := io.Discard
 	for {
 		v, telnet, _, err := conn.rd.ReadMultiBulk()
@@ -296,12 +290,10 @@ func (s *Server) followStep(host string, port int, followc int) error {
 		if err != nil {
 			return err
 		}
-		s.mu.Lock()
-		s.faofsz = aofsz
-		s.mu.Unlock()
 		if !caughtUp {
 			if aofsz >= int(aofSize) {
 				caughtUp = true
+				s.mu.Lock()
 				s.flushAOF(false)
 				s.fcup = true
 				s.fcuponce = true

@@ -428,19 +428,6 @@ func (s *Server) writeInfoStats(w *bytes.Buffer) {
 	fmt.Fprintf(w, "expired_keys:%d\r\n", s.statsExpired.Load())                   // Total number of key expiration events
 }
 
-func replicaIPAndPort(cc *Client) (ip string, port int) {
-	ip = cc.remoteAddr
-	i := strings.LastIndex(ip, ":")
-	if i != -1 {
-		ip = ip[:i]
-		if ip == "[::1]" {
-			ip = "localhost"
-		}
-	}
-	port = cc.replPort
-	return ip, port
-}
-
 // writeInfoReplication writes all replication data to the 'info' response
 func (s *Server) writeInfoReplication(w *bytes.Buffer) {
 	if s.config.followHost() != "" {
@@ -456,9 +443,8 @@ func (s *Server) writeInfoReplication(w *bytes.Buffer) {
 		s.connsmu.RLock()
 		for _, cc := range s.conns {
 			if cc.replPort != 0 {
-				ip, port := replicaIPAndPort(cc)
 				fmt.Fprintf(w, "slave%v:ip=%s,port=%v,state=online\r\n", i,
-					ip, port)
+					strings.Split(cc.remoteAddr, ":")[0], cc.replPort)
 				i++
 			}
 		}
@@ -601,96 +587,4 @@ func respValuesSimpleMap(m map[string]interface{}) []resp.Value {
 		vals = append(vals, resp.StringValue(fmt.Sprintf("%v", val)))
 	}
 	return vals
-}
-
-// ROLE
-func (s *Server) cmdROLE(msg *Message) (res resp.Value, err error) {
-	start := time.Now()
-	var role string
-	var offset int
-	var ips []string
-	var ports []int
-	var offsets []int
-	var host string
-	var port int
-	var state string
-	if s.config.followHost() == "" {
-		role = "master"
-		offset = s.aofsz
-		s.connsmu.RLock()
-		for _, cc := range s.conns {
-			if cc.replPort != 0 {
-				ip, port := replicaIPAndPort(cc)
-				ips = append(ips, ip)
-				ports = append(ports, port)
-				offsets = append(offsets, s.aofsz)
-			}
-		}
-		s.connsmu.RUnlock()
-	} else {
-		role = "slave"
-		host = s.config.followHost()
-		port = s.config.followPort()
-		offset = int(s.faofsz)
-		state = "connected"
-	}
-	if msg.OutputType == JSON {
-		var json []byte
-		json = append(json, `{"ok":true,"role":{"`...)
-		json = append(json, `"role":`...)
-		json = appendJSONString(json, role)
-		if role == "master" {
-			json = append(json, `,"offset":`...)
-			json = strconv.AppendInt(json, int64(offset), 10)
-			json = append(json, `,"slaves":[`...)
-			for i := range ips {
-				if i > 0 {
-					json = append(json, ',')
-				}
-				json = append(json, '{')
-				json = append(json, `"ip":`...)
-				json = appendJSONString(json, ips[i])
-				json = append(json, `,"port":`...)
-				json = appendJSONString(json, fmt.Sprint(ports[i]))
-				json = append(json, `,"offset":`...)
-				json = appendJSONString(json, fmt.Sprint(offsets[i]))
-				json = append(json, '}')
-			}
-			json = append(json, `]`...)
-		} else if role == "slave" {
-			json = append(json, `,"host":`...)
-			json = appendJSONString(json, host)
-			json = append(json, `,"port":`...)
-			json = strconv.AppendInt(json, int64(port), 10)
-			json = append(json, `,"state":`...)
-			json = appendJSONString(json, state)
-			json = append(json, `,"offset":`...)
-			json = strconv.AppendInt(json, int64(offset), 10)
-		}
-		json = append(json, `},"elapsed":`...)
-		json = appendJSONString(json, time.Since(start).String())
-		json = append(json, '}')
-		return resp.StringValue(string(json)), nil
-	} else {
-		var vals []resp.Value
-		vals = append(vals, resp.StringValue(role))
-		if role == "master" {
-			vals = append(vals, resp.IntegerValue(offset))
-			var replicaVals []resp.Value
-			for i := range ips {
-				var vals []resp.Value
-				vals = append(vals, resp.StringValue(ips[i]))
-				vals = append(vals, resp.StringValue(fmt.Sprint(ports[i])))
-				vals = append(vals, resp.StringValue(fmt.Sprint(offsets[i])))
-				replicaVals = append(replicaVals, resp.ArrayValue(vals))
-			}
-			vals = append(vals, resp.ArrayValue(replicaVals))
-		} else if role == "slave" {
-			vals = append(vals, resp.StringValue(host))
-			vals = append(vals, resp.IntegerValue(port))
-			vals = append(vals, resp.StringValue(state))
-			vals = append(vals, resp.IntegerValue(offset))
-		}
-		return resp.ArrayValue(vals), nil
-	}
 }

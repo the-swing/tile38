@@ -136,7 +136,6 @@ type Server struct {
 	lstack   []*commandDetails
 	lives    map[*liveBuffer]bool
 	lcond    *sync.Cond // live geofence signal
-	faofsz   int        // last reported aofsize
 	fcup     bool       // follow caught up
 	fcuponce bool       // follow caught up once
 	aofconnM map[net.Conn]io.Closer
@@ -1024,7 +1023,7 @@ func (s *Server) handleInputCommand(client *Client, msg *Message) error {
 		}
 	case "get", "keys", "scan", "nearby", "within", "intersects", "hooks",
 		"chans", "search", "ttl", "bounds", "server", "info", "type", "jget",
-		"evalro", "evalrosha", "healthz", "role":
+		"evalro", "evalrosha", "healthz":
 		// read operations
 
 		s.mu.RLock()
@@ -1211,8 +1210,6 @@ func (s *Server) command(msg *Message, client *Client) (
 		res, err = s.cmdHEALTHZ(msg)
 	case "info":
 		res, err = s.cmdINFO(msg)
-	case "role":
-		res, err = s.cmdROLE(msg)
 	case "scan":
 		res, err = s.cmdScan(msg)
 	case "nearby":
