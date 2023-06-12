@@ -17,7 +17,6 @@ import (
 	"github.com/tidwall/geojson/geo"
 	"github.com/tidwall/resp"
 	"github.com/tidwall/tile38/internal/log"
-	"github.com/tidwall/tinylru"
 	lua "github.com/yuin/gopher-lua"
 	luajson "layeh.com/gopher-json"
 )
@@ -225,17 +224,13 @@ func (pl *lStatePool) Shutdown() {
 type lScriptMap struct {
 	m       sync.Mutex
 	scripts map[string]*lua.FunctionProto
-	lru     tinylru.LRUG[string, *lua.FunctionProto]
 }
 
 func (sm *lScriptMap) Get(key string) (script *lua.FunctionProto, ok bool) {
 	sm.m.Lock()
 	script, ok = sm.scripts[key]
-	if !ok {
-		script, ok = sm.lru.Get(key)
-	}
 	sm.m.Unlock()
-	return script, ok
+	return
 }
 
 func (sm *lScriptMap) Put(key string, script *lua.FunctionProto) {
@@ -244,16 +239,9 @@ func (sm *lScriptMap) Put(key string, script *lua.FunctionProto) {
 	sm.m.Unlock()
 }
 
-func (sm *lScriptMap) PutLRU(key string, script *lua.FunctionProto) {
-	sm.m.Lock()
-	sm.lru.Set(key, script)
-	sm.m.Unlock()
-}
-
 func (sm *lScriptMap) Flush() {
 	sm.m.Lock()
 	sm.scripts = make(map[string]*lua.FunctionProto)
-	sm.lru.Clear()
 	sm.m.Unlock()
 }
 

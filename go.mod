@@ -31,7 +31,6 @@ require (
 	github.com/tidwall/resp v0.1.1
 	github.com/tidwall/rtree v1.9.2
 	github.com/tidwall/sjson v1.2.4
-	github.com/tidwall/tinylru v1.2.1
 	github.com/xdg/scram v1.0.5
 	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da
 	go.uber.org/atomic v1.5.0
