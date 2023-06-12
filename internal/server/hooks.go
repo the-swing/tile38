@@ -240,37 +240,6 @@ func byHookExpires(a, b interface{}) bool {
 	return ha.Name < hb.Name
 }
 
-func (s *Server) cmdDELHOOKop(name string, channel bool) (updated bool) {
-	hook, _ := s.hooks.Get(&Hook{Name: name}).(*Hook)
-	if hook == nil || hook.channel != channel {
-		return false
-	}
-	hook.Close()
-	// remove hook from maps
-	s.hooks.Delete(hook)
-	s.hooksOut.Delete(hook)
-	if !hook.expires.IsZero() {
-		s.hookExpires.Delete(hook)
-	}
-	// remove any hook / object connections
-	s.groupDisconnectHook(hook.Name)
-	// remove hook from spatial index
-	if hook.Fence != nil && hook.Fence.obj != nil {
-		rect := hook.Fence.obj.Rect()
-		s.hookTree.Delete(
-			[2]float64{rect.Min.X, rect.Min.Y},
-			[2]float64{rect.Max.X, rect.Max.Y},
-			hook)
-		if hook.Fence.detect["cross"] {
-			s.hookCross.Delete(
-				[2]float64{rect.Min.X, rect.Min.Y},
-				[2]float64{rect.Max.X, rect.Max.Y},
-				hook)
-		}
-	}
-	return true
-}
-
 func (s *Server) cmdDelHook(msg *Message) (
 	res resp.Value, d commandDetails, err error,
 ) {
@@ -286,8 +255,33 @@ func (s *Server) cmdDelHook(msg *Message) (
 	if len(vs) != 0 {
 		return NOMessage, d, errInvalidNumberOfArguments
 	}
-
-	d.updated = s.cmdDELHOOKop(name, channel)
+	hook, _ := s.hooks.Get(&Hook{Name: name}).(*Hook)
+	if hook != nil && hook.channel == channel {
+		hook.Close()
+		// remove hook from maps
+		s.hooks.Delete(hook)
+		s.hooksOut.Delete(hook)
+		if !hook.expires.IsZero() {
+			s.hookExpires.Delete(hook)
+		}
+		// remove any hook / object connections
+		s.groupDisconnectHook(hook.Name)
+		// remove hook from spatial index
+		if hook.Fence != nil && hook.Fence.obj != nil {
+			rect := hook.Fence.obj.Rect()
+			s.hookTree.Delete(
+				[2]float64{rect.Min.X, rect.Min.Y},
+				[2]float64{rect.Max.X, rect.Max.Y},
+				hook)
+			if hook.Fence.detect["cross"] {
+				s.hookCross.Delete(
+					[2]float64{rect.Min.X, rect.Min.Y},
+					[2]float64{rect.Max.X, rect.Max.Y},
+					hook)
+			}
+		}
+		d.updated = true
+	}
 	d.timestamp = time.Now()
 
 	switch msg.OutputType {
@@ -329,7 +323,29 @@ func (s *Server) cmdPDelHook(msg *Message) (
 		if hook.channel != channel {
 			continue
 		}
-		s.cmdDELHOOKop(hook.Name, channel)
+		hook.Close()
+		// remove hook from maps
+		s.hooks.Delete(hook)
+		s.hooksOut.Delete(hook)
+		if !hook.expires.IsZero() {
+			s.hookExpires.Delete(hook)
+		}
+		// remove any hook / object connections
+		s.groupDisconnectHook(hook.Name)
+		// remove hook from spatial index
+		if hook.Fence != nil && hook.Fence.obj != nil {
+			rect := hook.Fence.obj.Rect()
+			s.hookTree.Delete(
+				[2]float64{rect.Min.X, rect.Min.Y},
+				[2]float64{rect.Max.X, rect.Max.Y},
+				hook)
+			if hook.Fence.detect["cross"] {
+				s.hookCross.Delete(
+					[2]float64{rect.Min.X, rect.Min.Y},
+					[2]float64{rect.Max.X, rect.Max.Y},
+					hook)
+			}
+		}
 		d.updated = true
 		count++
 	}

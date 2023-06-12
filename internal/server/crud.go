@@ -412,15 +412,6 @@ func (s *Server) cmdPDEL(msg *Message) (resp.Value, commandDetails, error) {
 	return res, d, nil
 }
 
-func (s *Server) cmdDROPop(key string) *collection.Collection {
-	col, _ := s.cols.Get(key)
-	if col != nil {
-		s.cols.Delete(key)
-	}
-	s.groupDisconnectCollection(key)
-	return col
-}
-
 // DROP key
 func (s *Server) cmdDROP(msg *Message) (resp.Value, commandDetails, error) {
 	start := time.Now()
@@ -434,7 +425,12 @@ func (s *Server) cmdDROP(msg *Message) (resp.Value, commandDetails, error) {
 	key := args[1]
 
 	// >> Operation
-	col := s.cmdDROPop(key)
+
+	col, _ := s.cols.Get(key)
+	if col != nil {
+		s.cols.Delete(key)
+	}
+	s.groupDisconnectCollection(key)
 
 	// >> Response
 
@@ -546,39 +542,6 @@ func (s *Server) cmdFLUSHDB(msg *Message) (resp.Value, commandDetails, error) {
 	// >> Operation
 
 	// clear the entire database
-
-	// drop each collection
-	keys := s.cols.Keys()
-	for _, key := range keys {
-		s.cmdDROPop(key)
-	}
-
-	// delete all channels
-	var names []string
-	s.hooks.Ascend(nil, func(item any) bool {
-		hook := item.(*Hook)
-		if hook.channel {
-			names = append(names, hook.Name)
-		}
-		return true
-	})
-	for _, name := range names {
-		s.cmdDELHOOKop(name, true)
-	}
-
-	// delete all hooks
-	names = names[:0]
-	s.hooks.Ascend(nil, func(item any) bool {
-		hook := item.(*Hook)
-		if !hook.channel {
-			names = append(names, hook.Name)
-		}
-		return true
-	})
-	for _, name := range names {
-		s.cmdDELHOOKop(name, false)
-	}
-
 	s.cols.Clear()
 	s.groupHooks.Clear()
 	s.groupObjects.Clear()
